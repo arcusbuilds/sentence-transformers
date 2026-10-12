@@ -346,6 +346,29 @@ class TestCreateMinibatchMixedModality:
         assert mb["pixel_values"].shape[0] == 0
 
 
+class TestCreateMinibatchStackedImages:
+    @pytest.fixture
+    def features(self):
+        # Rows own 1, 0 and 2 images: 3 images for 3 rows, so a row slice looks valid but is wrong.
+        return {
+            "input_ids": torch.arange(3 * 5).reshape(3, 5),
+            "pixel_values": torch.arange(3 * 4, dtype=torch.float).reshape(3, 4),
+            "image_sizes": torch.tensor([[32, 32], [64, 64], [96, 96]]),
+            "num_images_per_sample": torch.tensor([1, 0, 2]),
+        }
+
+    @pytest.mark.parametrize(("begin", "end", "image_begin", "image_end"), [(0, 2, 0, 1), (2, 3, 1, 3)])
+    def test_slices_by_image_count(self, features, begin, end, image_begin, image_end):
+        mb = _create_minibatch(features, begin, end)
+        assert torch.equal(mb["pixel_values"], features["pixel_values"][image_begin:image_end])
+        assert torch.equal(mb["image_sizes"], features["image_sizes"][image_begin:image_end])
+
+    def test_sample_first_layout_keeps_row_slicing(self, features):
+        features["pixel_attention_mask"] = torch.ones(3, 4, dtype=torch.bool)
+        mb = _create_minibatch(features, 0, 2)
+        assert torch.equal(mb["pixel_values"], features["pixel_values"][0:2])
+
+
 def test_cmnrl_attributes_and_config_back_compat(stsb_bert_tiny_model: SentenceTransformer) -> None:
     """CachedMultipleNegativesRankingLoss composes an inner MultipleNegativesRankingLoss, but
     the documented attributes and ``get_config_dict`` keys must keep working as before the rebase."""

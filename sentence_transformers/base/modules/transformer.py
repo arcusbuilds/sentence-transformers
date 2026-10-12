@@ -1414,7 +1414,7 @@ class Transformer(InputModule):
                 chat_template_kwargs=chat_template_kwargs,
             )
 
-        if num_images_per_sample is not None and "image_grid_thw" in processor_output:
+        if num_images_per_sample is not None and "pixel_values" in processor_output:
             processor_output["num_images_per_sample"] = torch.tensor(num_images_per_sample, dtype=torch.long)
         if num_videos_per_sample is not None and "video_grid_thw" in processor_output:
             processor_output["num_videos_per_sample"] = torch.tensor(num_videos_per_sample, dtype=torch.long)

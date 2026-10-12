@@ -83,6 +83,12 @@ def _get_batch_size(sentence_feature: dict[str, Any]) -> int:
     )
 
 
+# Indexed per image, not per sample, by gridless VLMs (LLaVA, Gemma3).
+_IMAGE_AXIS_KEYS = ("pixel_values", "image_position_ids", "image_sizes")
+# Processors that pad images per sample (Idefics3, Mllama) emit these; their pixel_values are row-indexed.
+_SAMPLE_FIRST_IMAGE_KEYS = ("pixel_attention_mask", "aspect_ratio_ids")
+
+
 def _create_minibatch(sentence_feature: dict[str, Any], begin: int, end: int) -> dict[str, Any]:
     """Create a mini-batch from sentence features, handling padded, flattened, and VLM inputs.
 
@@ -132,6 +138,22 @@ def _create_minibatch(sentence_feature: dict[str, Any], begin: int, end: int) ->
             else:
                 token_begin, token_end = 0, 0
             custom_ranges[pixel_key] = (token_begin, token_end)
+
+        num_images = sentence_feature.get("num_images_per_sample")
+        pixel_values = sentence_feature.get("pixel_values")
+        if (
+            num_images is not None
+            and pixel_values is not None
+            and "pixel_values" not in custom_ranges
+            and not any(key in sentence_feature for key in _SAMPLE_FIRST_IMAGE_KEYS)
+            and pixel_values.shape[0] == int(num_images.sum().item())
+        ):
+            image_cumsum = num_images.cumsum(dim=0)
+            image_begin = 0 if begin == 0 else int(image_cumsum[begin - 1].item())
+            image_end = int(image_cumsum[end - 1].item())
+            for key in _IMAGE_AXIS_KEYS:
+                if key in sentence_feature:
+                    custom_ranges[key] = (image_begin, image_end)
 
         # Trim trailing padding columns so short-sequence mini-batches are not embedded at the full
         # batch width (see the docstring). Left padding is kept, to preserve length-derived positions.

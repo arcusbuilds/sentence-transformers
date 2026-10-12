@@ -748,6 +748,25 @@ class TestPreprocess:
         assert "ends in a padding token" in message
         assert 'processor.tokenizer.padding_side = "left"' in message
 
+    @pytest.mark.skipif(
+        Version(transformers_version) < Version("5.0.0"), reason="any-to-any requires transformers v5+"
+    )
+    @pytest.mark.skipif(
+        not (is_vision_available() and is_torchvision_available()),
+        reason="Loading the Llava processor requires Pillow and torchvision",
+    )
+    def test_num_images_per_sample_without_image_grid(self):
+        """LLaVA stacks pixel_values per image with no image_grid_thw; cached losses still need the counts."""
+        from PIL import Image
+
+        transformer = Transformer(TINY_LLAVA, transformer_task="any-to-any")
+        transformer.track_media_counts = True
+        image = Image.new("RGB", (32, 32), "red")
+        features = transformer.preprocess(
+            [{"text": "a", "image": image}, {"text": "text only"}, {"text": "b", "image": [image, image]}]
+        )
+        assert features["num_images_per_sample"].tolist() == [1, 0, 2]
+
 
 class TestForward:
     def test_missing_method_error(self, bert_tiny_transformer):
