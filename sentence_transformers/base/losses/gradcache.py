@@ -85,7 +85,7 @@ def _get_batch_size(sentence_feature: dict[str, Any]) -> int:
 
 # Indexed per image, not per sample, by gridless VLMs (LLaVA, Gemma3).
 _IMAGE_AXIS_KEYS = ("pixel_values", "image_position_ids", "image_sizes")
-# Processors that pad images per sample (Idefics3, Mllama) emit these; their pixel_values are row-indexed.
+# Processors that pad images per sample (Idefics3, Mllama) emit these.
 _SAMPLE_FIRST_IMAGE_KEYS = ("pixel_attention_mask", "aspect_ratio_ids")
 
 
@@ -179,7 +179,8 @@ def _create_minibatch(sentence_feature: dict[str, Any], begin: int, end: int) ->
                 result[key] = value
             elif key in custom_ranges:
                 r_begin, r_end = custom_ranges[key]
-                result[key] = value[r_begin:r_end]
+                if r_begin != r_end:
+                    result[key] = value[r_begin:r_end]
             elif token_axis_end is not None and value.ndim >= 2 and value.shape[1] == seq_width:
                 result[key] = value[begin:end, :token_axis_end]
             else:
@@ -423,10 +424,6 @@ class CachedLossMixin:
     mini_batch_size: int
     mini_batch_num_tokens: int | None = None
     show_progress_bar: bool = False
-
-    # Enables per-sample media counting in Transformer.preprocess, so that _create_minibatch can
-    # slice VLM inputs (e.g. Qwen2-VL's flattened pixel_values) along the batch dimension.
-    requires_media_counts = True
 
     # See `uses_gradient_cache`. A subclass that can turn the caching off overrides this per instance.
     uses_gradient_cache: bool = True
